@@ -6,6 +6,8 @@
 
     <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
+
 
     <style>
         body {
@@ -75,6 +77,11 @@
             <div class="sidebar-header text-center py-3 mb-2 mt-2">
                 <h4>Hubspot API DOC</h4>
             </div>
+            <div class="text-center">
+                <button class="btn btn-warning mb-3" data-bs-toggle="modal" data-bs-target="#authModal">
+                    Authenticate
+                </button>
+            </div>
             <div id="endpointList"></div>
         </div>
 
@@ -114,13 +121,41 @@
         </div>
     </div>
 </div>
+<div class="modal fade" id="authModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content text-dark">
 
+      <div class="modal-header">
+        <h5 class="modal-title">Enter Access Token</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <input type="text" id="modalAccessToken" class="form-control" placeholder="Paste access token here">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="saveToken()">Save</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
 <script>
+    const notyf = new Notyf({
+    duration: 3000,
+    position: { x: 'right', y: 'top' },
+    ripple: true,
+    dismissible: true
+});
 const apiDocs = [
     {
         name: "Get Contact Fields",
         method: "POST",
-        url: "https://domain-name.com:3000/api/get-contact-required-fields",
+        url: "https://traini.callhub.ai:8080/api/get-contact-required-fields",
         description: "Fetch all contact fields",
         body: {
             "access_token":"************",
@@ -129,7 +164,7 @@ const apiDocs = [
     {
         name: "Create Contact Record",
         method: "POST",
-        url: "https://domain-name.com:3000/api/create-contact",
+        url: "https://traini.callhub.ai:8080/api/create-contact",
         description: "Create new Contact",
         body: {
             "access_token":"************",
@@ -149,7 +184,7 @@ const apiDocs = [
     {
         name: "Get Company Fields",
         method: "POST",
-        url: "https://domain-name.com:3000/api/get-company-required-fields",
+        url: "https://traini.callhub.ai:8080/api/get-company-required-fields",
         description: "Fetch all company fields",
         body: {
             "access_token":"************",
@@ -158,7 +193,7 @@ const apiDocs = [
     {
         name: "Create Company Record",
         method: "POST",
-        url: "https://domain-name.com:3000/api/create-company",
+        url: "https://traini.callhub.ai:8080/api/create-company",
         description: "Create new company record",
         body: {
             "access_token":"************",
@@ -221,9 +256,11 @@ function showEndpoint(i) {
         bodyField.readOnly = true;
         bodyField.style.backgroundColor = "#2a2e3b";
     } else {
-        bodyField.value = api.body
-            ? JSON.stringify(api.body, null, 2)
-            : "";
+        let bodyData = api.body ? { ...api.body } : {};
+        if (globalAccessToken && bodyData.hasOwnProperty("access_token")) {
+            bodyData.access_token = globalAccessToken;
+        }
+        bodyField.value = JSON.stringify(bodyData, null, 2);
         bodyField.readOnly = false;
         bodyField.style.backgroundColor = "#fff";
     }
@@ -232,10 +269,9 @@ function showEndpoint(i) {
 }
 
 function sendRequest() {
-    const button = document.querySelector("button");
+    const button = document.querySelector(".btn-success");
     const responseEl = document.getElementById("response");
 
-    // Show loading
     button.disabled = true;
     button.innerText = "Loading...";
     responseEl.innerText = "Loading...";
@@ -244,10 +280,25 @@ function sendRequest() {
     const url = document.getElementById("url").value;
     const body = document.getElementById("body").value;
 
+    let parsedBody = {};
+
+    try {
+        parsedBody = body ? JSON.parse(body) : {};
+    } catch {
+        notyf.error("Invalid JSON");
+        button.disabled = false;
+        button.innerText = "Send Request";
+        return;
+    }
+
+    if (globalAccessToken && parsedBody.hasOwnProperty("access_token")) {
+        parsedBody.access_token = globalAccessToken;
+    }
+
     fetch(url, {
         method: method,
         headers: { "Content-Type": "application/json" },
-        body: method !== "GET" ? body : null
+        body: method !== "GET" ? JSON.stringify(parsedBody) : null
     })
     .then(res => res.text())
     .then(data => {
@@ -267,6 +318,39 @@ function sendRequest() {
 }
 
 loadEndpoints();
+let globalAccessToken = "";
+
+function saveToken() {
+    const token = document.getElementById("modalAccessToken").value.trim();
+
+    if (!token) {
+        notyf.error("Token required!");
+        return;
+    }
+
+    globalAccessToken = token;
+
+    document.querySelector(".btn-warning").innerText = "Authenticated";
+    const modal = bootstrap.Modal.getInstance(document.getElementById('authModal'));
+    modal.hide();
+    notyf.success("Token saved");
+
+
+    updateBodyToken();
+}
+function updateBodyToken() {
+    const bodyField = document.getElementById("body");
+
+    try {
+        let body = JSON.parse(bodyField.value || "{}");
+
+        if (body.hasOwnProperty("access_token")) {
+            body.access_token = globalAccessToken;
+        }
+
+        bodyField.value = JSON.stringify(body, null, 2);
+    } catch {}
+}
 </script>
 
 </body>
